@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Perch — Clipboard Manager for Your Menu Bar</title>
+  <meta name="description" content="A minimal clipboard manager that perches in your menu bar. Saved snippets, clipboard history, keyboard-first. macOS, Windows, Linux.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #09090b;
+      --bg-subtle: #0e0e12;
+      --surface: #18181b;
+      --surface-hover: #1f1f23;
+      --border: rgba(255, 255, 255, 0.08);
+      --accent: #fb923c;
+      --accent-glow: rgba(251, 146, 60, 0.15);
+      --accent-dim: #c2722e;
+      --text: #fafafa;
+      --text-muted: #71717a;
+      --text-dim: #52525b;
+      --gradient-start: #fb923c;
+      --gradient-end: #f97316;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Noise texture overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      opacity: 0.03;
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 16px 0;
+      background: rgba(9, 9, 11, 0.3);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 20px;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      color: #000;
+      box-shadow: 0 4px 24px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--surface-hover);
+      border-color: rgba(255,255,255,0.15);
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 160px 0 80px;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1000px;
+      height: 800px;
+      background: radial-gradient(ellipse, var(--accent-glow) 0%, transparent 60%);
+      pointer-events: none;
+      opacity: 0.8;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      animation: fadeInUp 0.6s ease-out;
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      background: #22c55e;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
+      50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero h1 {
+      font-size: clamp(52px, 9vw, 88px);
+      font-weight: 900;
+      line-height: 1.15;
+      letter-spacing: -0.04em;
+      margin-bottom: 28px;
+      animation: fadeInUp 0.6s ease-out 0.1s both;
+    }
+
+    .hero h1 .line1 {
+      display: block;
+      background: linear-gradient(180deg, var(--text) 0%, rgba(250,250,250,0.7) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero h1 .line2 {
+      display: block;
+      background: linear-gradient(135deg, var(--gradient-start) 0%, #fbbf24 50%, var(--gradient-end) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      background-size: 200% 200%;
+      animation: gradientShift 4s ease infinite;
+    }
+
+    @keyframes gradientShift {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    .hero-subtitle {
+      font-size: 20px;
+      color: var(--text-muted);
+      max-width: 580px;
+      margin: 0 auto 36px;
+      line-height: 1.7;
+      animation: fadeInUp 0.6s ease-out 0.2s both;
+    }
+
+    .hero-features {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+      animation: fadeInUp 0.6s ease-out 0.3s both;
+    }
+
+    .hero-feature {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 18px;
+      background: rgba(251, 146, 60, 0.08);
+      border: 1px solid rgba(251, 146, 60, 0.2);
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--accent);
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 80px;
+      animation: fadeInUp 0.6s ease-out 0.4s both;
+    }
+
+    .btn-primary .arrow {
+      transition: transform 0.2s;
+    }
+
+    .btn-primary:hover .arrow {
+      transform: translateX(4px);
+    }
+
+    /* Stats */
+    .stats {
+      display: flex;
+      gap: 48px;
+      justify-content: center;
+      margin-bottom: 60px;
+      animation: fadeInUp 0.6s ease-out 0.5s both;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* App Preview */
+    .app-preview {
+      position: relative;
+      max-width: 400px;
+      margin: 0 auto;
+      animation: fadeInUp 0.8s ease-out 0.6s both;
+    }
+
+    .app-preview::before {
+      content: '';
+      position: absolute;
+      inset: -60px;
+      background: radial-gradient(ellipse at center, var(--accent-glow) 0%, transparent 70%);
+      filter: blur(60px);
+      z-index: -1;
+    }
+
+    .mockup {
+      background: rgba(14, 14, 16, 0.98);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.05),
+        0 25px 60px rgba(0,0,0,0.6),
+        0 0 120px var(--accent-glow);
+    }
+
+    .mockup-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(31, 31, 37, 0.6);
+    }
+
+    .mockup-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .mockup-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--surface);
+    }
+
+    .mockup-dot:nth-child(1) { background: #ff5f57; }
+    .mockup-dot:nth-child(2) { background: #ffbd2e; }
+    .mockup-dot:nth-child(3) { background: #28ca42; }
+
+    .mockup-logo {
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-left: 8px;
+    }
+
+    .mockup-search {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.04);
+      border-radius: 8px;
+      margin-left: auto;
+    }
+
+    .mockup-search span {
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+
+    .mockup-content {
+      padding: 10px;
+    }
+
+    .mockup-section {
+      margin-bottom: 10px;
+    }
+
+    .mockup-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .mockup-section-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      padding: 8px 12px 6px;
+      font-weight: 600;
+    }
+
+    .mockup-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+
+    .mockup-item.selected {
+      background: rgba(251, 146, 60, 0.12);
+      outline: 1px solid var(--accent);
+      color: var(--text);
+    }
+
+    .mockup-item strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .mockup-shortcut {
+      font-size: 11px;
+      color: var(--text-dim);
+      background: rgba(255,255,255,0.06);
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    .mockup-footer {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .mockup-footer a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    /* How It Works */
+    .how-it-works {
+      padding: 120px 0;
+      position: relative;
+    }
+
+    .how-it-works .container {
+      text-align: center;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      margin-top: 64px;
+    }
+
+    @media (max-width: 800px) {
+      .steps {
+        grid-template-columns: 1fr;
+        max-width: 400px;
+        margin: 64px auto 0;
+      }
+    }
+
+    .step {
+      position: relative;
+      text-align: center;
+      padding: 40px 32px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      transition: all 0.3s;
+    }
+
+    .step:hover {
+      border-color: rgba(251, 146, 60, 0.3);
+      transform: translateY(-4px);
+    }
+
+    .step-number {
+      position: absolute;
+      top: -16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      color: #000;
+    }
+
+    .step-icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+
+    .step h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .step p {
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    /* Features Section */
+    .features {
+      padding: 120px 0;
+      position: relative;
+      background: var(--bg-subtle);
+      border-top: 1px solid var(--border);
+    }
+
+    .section-label {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: clamp(32px, 5vw, 48px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+    }
+
+    .section-subtitle {
+      font-size: 18px;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin-bottom: 64px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 600px) {
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .feature-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      transition: all 0.3s;
+    }
+
+    .feature-card:hover {
+      border-color: rgba(251, 146, 60, 0.3);
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    }
+
+    .feature-icon {
+      width: 52px;
+      height: 52px;
+      background: linear-gradient(135deg, rgba(251, 146, 60, 0.15), transparent);
+      border: 1px solid rgba(251, 146, 60, 0.2);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      margin-bottom: 20px;
+    }
+
+    .feature-card h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .feature-card p {
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    /* Keyboard Section */
+    .keyboard-section {
+      padding: 120px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .keyboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    @media (max-width: 800px) {
+      .keyboard-grid {
+        grid-template-columns: 1fr;
+        gap: 48px;
+      }
+    }
+
+    .keyboard-content h2 {
+      font-size: clamp(32px, 5vw, 44px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 20px;
+    }
+
+    .keyboard-content p {
+      color: var(--text-muted);
+      font-size: 17px;
+      line-height: 1.8;
+      margin-bottom: 32px;
+    }
+
+    .shortcuts-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .shortcut-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 38px;
+      height: 38px;
+      padding: 0 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      box-shadow: 0 3px 0 rgba(0,0,0,0.3);
+    }
+
+    .shortcut-desc {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .keyboard-visual {
+      display: flex;
+      justify-content: center;
+    }
+
+    .keyboard-mockup {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      padding: 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+    }
+
+    .keyboard-key {
+      width: 60px;
+      height: 60px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 600;
+      transition: all 0.15s;
+      box-shadow: 0 4px 0 rgba(0,0,0,0.3);
+    }
+
+    .keyboard-key.active {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 var(--accent-dim);
+    }
+
+    /* CTA Section */
+    .cta {
+      padding: 160px 0;
+      text-align: center;
+      position: relative;
+    }
+
+    .cta::before {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      height: 500px;
+      background: radial-gradient(ellipse at bottom, var(--accent-glow) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .cta h2 {
+      font-size: clamp(40px, 7vw, 64px);
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      margin-bottom: 20px;
+    }
+
+    .cta p {
+      font-size: 18px;
+      color: var(--text-muted);
+      margin-bottom: 48px;
+    }
+
+    .cta p a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .download-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .download-btn {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .download-btn:hover {
+      background: var(--surface-hover);
+      border-color: var(--accent);
+      transform: translateY(-3px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
+    .download-btn svg {
+      width: 30px;
+      height: 30px;
+      fill: var(--text);
+    }
+
+    .download-info {
+      text-align: left;
+    }
+
+    .download-label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .download-platform {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Footer */
+    footer {
+      padding: 48px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    footer .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 28px;
+    }
+
+    .footer-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover {
+      color: var(--text);
+    }
+
+    .copyright {
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+
+    /* Animations */
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-12px); }
+    }
+
+    .app-preview {
+      animation: float 6s ease-in-out infinite;
+    }
+
+    /* Mobile nav */
+    @media (max-width: 700px) {
+      .nav-links {
+        display: none;
+      }
+
+      footer .container {
+        flex-direction: column;
+        gap: 24px;
+        text-align: center;
+      }
+
+      .stats {
+        gap: 32px;
+      }
+
+      .stat-value {
+        font-size: 28px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="container">
+      <a href="#" class="logo">
+        <div class="logo-icon">🐦</div>
+        Perch
+      </a>
+      <div class="nav-links">
+        <a href="#how-it-works">How it Works</a>
+        <a href="#features">Features</a>
+        <a href="https://github.com/RajeshRenato/open-perch" target="_blank">GitHub</a>
+        <a href="#download" class="btn btn-primary">Download Free</a>
+      </div>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="container">
+      <div class="badge">
+        <span class="badge-dot"></span>
+        Open Source & Free Forever
+      </div>
+      <h1>
+        <span class="line1">Your clipboard,</span>
+        <span class="line2">supercharged.</span>
+      </h1>
+      <p class="hero-subtitle">
+        A blazing-fast clipboard manager that lives in your menu bar.
+        Save snippets, track history, paste instantly with keyboard shortcuts.
+      </p>
+      <div class="hero-features">
+        <span class="hero-feature">⌨️ Custom Hotkeys</span>
+        <span class="hero-feature">🖼️ Image Support</span>
+        <span class="hero-feature">💾 Backup & Restore</span>
+        <span class="hero-feature">🔍 Instant Search</span>
+      </div>
+      <div class="hero-buttons">
+        <a href="#download" class="btn btn-primary">
+          Download Free <span class="arrow">→</span>
+        </a>
+        <a href="https://github.com/RajeshRenato/open-perch" class="btn btn-secondary" target="_blank">
+          View Source
+        </a>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-value">100+</div>
+          <div class="stat-label">History Items</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">∞</div>
+          <div class="stat-label">Saved Snippets</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">3</div>
+          <div class="stat-label">Platforms</div>
+        </div>
+      </div>
+
+      <div class="app-preview">
+        <div class="mockup">
+          <div class="mockup-header">
+            <div class="mockup-dots">
+              <div class="mockup-dot"></div>
+              <div class="mockup-dot"></div>
+              <div class="mockup-dot"></div>
+            </div>
+            <span class="mockup-logo">Perch</span>
+            <div class="mockup-search">
+              <span>🔍</span>
+              <span>Search...</span>
+            </div>
+          </div>
+          <div class="mockup-content">
+            <div class="mockup-section">
+              <div class="mockup-section-title">📌 Saved Snippets</div>
+              <div class="mockup-item selected">
+                <strong>API Key — Production</strong>
+                <span class="mockup-shortcut">⌘1</span>
+              </div>
+              <div class="mockup-item">
+                <strong>Email Signature</strong>
+                <span class="mockup-shortcut">⌘2</span>
+              </div>
+            </div>
+            <div class="mockup-section">
+              <div class="mockup-section-title">📋 Clipboard History</div>
+              <div class="mockup-item">
+                <span>npm install perch-app</span>
+                <span class="mockup-shortcut">⌘3</span>
+              </div>
+              <div class="mockup-item">
+                <span>const config = {...}</span>
+                <span class="mockup-shortcut">⌘4</span>
+              </div>
+              <div class="mockup-item">
+                <span>🖼️ Screenshot (1200×630)</span>
+                <span class="mockup-shortcut">⌘5</span>
+              </div>
+            </div>
+          </div>
+          <div class="mockup-footer">
+            <span>5 items</span>
+            <a href="#">Open Perch →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="how-it-works" id="how-it-works">
+    <div class="container">
+      <span class="section-label">How It Works</span>
+      <h2 class="section-title">Simple. Fast. Powerful.</h2>
+      <p class="section-subtitle">Get started in seconds. No account, no cloud, no complexity.</p>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-icon">📥</div>
+          <h3>Install & Launch</h3>
+          <p>Download for your platform, open once. Perch sits quietly in your menu bar, always ready.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-icon">📋</div>
+          <h3>Copy Anything</h3>
+          <p>Every text and image you copy is automatically saved. Up to 100 items in your history.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-icon">⚡</div>
+          <h3>Paste Instantly</h3>
+          <p>Hit your hotkey, search or navigate, press Enter. Your clipboard is now a superpower.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="container">
+      <span class="section-label">Features</span>
+      <h2 class="section-title">Everything you need,<br>nothing you don't</h2>
+      <p class="section-subtitle">
+        Designed for speed and simplicity. No bloat, no subscriptions, no cloud sync.
+        Just a fast clipboard manager that stays out of your way.
+      </p>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">📌</div>
+          <h3>Saved Snippets</h3>
+          <p>Pin your most-used text with custom labels. API keys, email templates, code snippets — always one click away.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📋</div>
+          <h3>Clipboard History</h3>
+          <p>Auto-captures everything you copy. Text and images, up to 100 items. Never lose that thing you copied.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">⌨️</div>
+          <h3>Customizable Hotkey</h3>
+          <p>Set your own global shortcut. Navigate with arrows, quick-select with ⌘1-9. Your hands never leave the keyboard.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔍</div>
+          <h3>Instant Search</h3>
+          <p>Start typing to filter. Search across snippets and history instantly. Find anything in milliseconds.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">💾</div>
+          <h3>Backup & Restore</h3>
+          <p>Export your snippets and settings. Restore on any device. Never lose your data when switching machines.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🌍</div>
+          <h3>Cross Platform</h3>
+          <p>Native apps for macOS, Windows, and Linux. Same experience, wherever you work.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="keyboard-section" id="keyboard">
+    <div class="container">
+      <div class="keyboard-grid">
+        <div class="keyboard-content">
+          <span class="section-label">Keyboard Shortcuts</span>
+          <h2>Built for<br>keyboard power users</h2>
+          <p>
+            Every action has a shortcut. Open the popup, search, navigate, and paste —
+            all without touching your mouse. It's the way clipboard should work.
+          </p>
+          <div class="shortcuts-list">
+            <div class="shortcut-row">
+              <span class="key">⌘</span>
+              <span class="key">⇧</span>
+              <span class="key">R</span>
+              <span class="shortcut-desc">Open Perch popup</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="key">↑</span>
+              <span class="key">↓</span>
+              <span class="shortcut-desc">Navigate items</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="key">Enter</span>
+              <span class="shortcut-desc">Copy & close</span>
+            </div>
+            <div class="shortcut-row">
+              <span class="key">⌘</span>
+              <span class="key">1-9</span>
+              <span class="shortcut-desc">Quick paste</span>
+            </div>
+          </div>
+        </div>
+        <div class="keyboard-visual">
+          <div class="keyboard-mockup">
+            <div class="keyboard-key active">⌘</div>
+            <div class="keyboard-key active">⇧</div>
+            <div class="keyboard-key active">R</div>
+            <div class="keyboard-key">V</div>
+            <div class="keyboard-key">1</div>
+            <div class="keyboard-key">2</div>
+            <div class="keyboard-key">3</div>
+            <div class="keyboard-key">4</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta" id="download">
+    <div class="container">
+      <h2>Ready to supercharge<br>your clipboard?</h2>
+      <p>Free and open source. No account required.<br>
+      <a href="https://github.com/RajeshRenato/open-perch/releases" target="_blank">View all releases →</a></p>
+      <div class="download-buttons">
+        <a href="https://github.com/RajeshRenato/open-perch/releases/latest/download/Perch-1.0.0-arm64.dmg" class="download-btn">
+          <svg viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          <div class="download-info">
+            <div class="download-label">Download for</div>
+            <div class="download-platform">macOS (Apple Silicon)</div>
+          </div>
+        </a>
+        <a href="https://github.com/RajeshRenato/open-perch/releases/latest/download/Perch-1.0.0.dmg" class="download-btn">
+          <svg viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          <div class="download-info">
+            <div class="download-label">Download for</div>
+            <div class="download-platform">macOS (Intel)</div>
+          </div>
+        </a>
+        <a href="https://github.com/RajeshRenato/open-perch/releases/latest/download/Perch%20Setup%201.0.0.exe" class="download-btn">
+          <svg viewBox="0 0 24 24"><path d="M3 12V6.75l6-1.32v6.48L3 12m17-9v8.75l-10 .15V5.21L20 3m-10 9.1l10 .15V21l-10-1.91v-7.99M3 13l6 .09v6.81l-6-1.15V13z"/></svg>
+          <div class="download-info">
+            <div class="download-label">Download for</div>
+            <div class="download-platform">Windows</div>
+          </div>
+        </a>
+        <a href="https://github.com/RajeshRenato/open-perch/releases/latest/download/Perch-1.0.0-x86_64.AppImage" class="download-btn">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+          <div class="download-info">
+            <div class="download-label">Download for</div>
+            <div class="download-platform">Linux</div>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <div class="footer-links">
+        <a href="https://github.com/RajeshRenato/open-perch" target="_blank">GitHub</a>
+        <a href="https://github.com/RajeshRenato/open-perch/releases" target="_blank">Releases</a>
+        <a href="https://github.com/RajeshRenato/open-perch/issues" target="_blank">Report Issue</a>
+        <a href="mailto:rajeshkumaarj@gmail.com">Feedback</a>
+      </div>
+      <div class="copyright">
+        Made by Rajesh Renato
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
