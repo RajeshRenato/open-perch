@@ -4,878 +4,958 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Perch — Clipboard Manager for Your Menu Bar</title>
-  <meta name="description" content="A minimal clipboard manager that perches in your menu bar. Saved snippets, clipboard history, keyboard-first. macOS, Windows, Linux.">
+  <meta name="description" content="A minimal clipboard manager that perches in your menu bar. OCR text extraction, smart tabs, saved snippets, clipboard history. macOS, Windows, Linux.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #09090b;
-      --bg-subtle: #0e0e12;
-      --surface: #18181b;
-      --surface-hover: #1f1f23;
-      --border: rgba(255, 255, 255, 0.08);
+      --bg: #08080a;
+      --bg-subtle: #0c0c10;
+      --surface: #141418;
+      --surface-hover: #1c1c22;
+      --border: rgba(255, 255, 255, 0.07);
+      --border-lit: rgba(251, 146, 60, 0.25);
       --accent: #fb923c;
-      --accent-glow: rgba(251, 146, 60, 0.15);
+      --accent-soft: #fdba74;
+      --accent-glow: rgba(251, 146, 60, 0.12);
       --accent-dim: #c2722e;
-      --text: #fafafa;
-      --text-muted: #71717a;
-      --text-dim: #52525b;
+      --text: #f0f0f2;
+      --text-muted: #7a7a86;
+      --text-dim: #4a4a56;
       --gradient-start: #fb923c;
-      --gradient-end: #f97316;
+      --gradient-mid: #f59e0b;
+      --gradient-end: #ef4444;
+      --mono: 'JetBrains Mono', monospace;
     }
 
-    html {
-      scroll-behavior: smooth;
-    }
+    html { scroll-behavior: smooth; }
 
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
       overflow-x: hidden;
     }
 
-    /* Noise texture overlay */
+    /* Grain overlay */
     body::before {
       content: '';
       position: fixed;
       inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      opacity: 0.025;
       pointer-events: none;
       z-index: 1000;
     }
 
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
 
-    /* Navigation */
+    /* Scroll reveal */
+    .reveal {
+      opacity: 0;
+      transform: translateY(32px);
+      transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+
+    /* ─── NAV ─── */
     nav {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 100;
-      padding: 16px 0;
-      background: rgba(9, 9, 11, 0.3);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 14px 0;
+      background: rgba(8, 8, 10, 0.6);
+      backdrop-filter: blur(20px) saturate(1.4);
+      -webkit-backdrop-filter: blur(20px) saturate(1.4);
+      border-bottom: 1px solid rgba(255,255,255,0.04);
     }
-
-    nav .container {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
+    nav .container { display: flex; align-items: center; justify-content: space-between; }
 
     .logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 700;
-      font-size: 20px;
-      color: var(--text);
-      text-decoration: none;
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 800; font-size: 20px; color: var(--text);
+      text-decoration: none; letter-spacing: -0.02em;
     }
-
     .logo-icon {
-      width: 32px;
-      height: 32px;
+      width: 34px; height: 34px;
       background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
       font-size: 18px;
+      box-shadow: 0 0 20px rgba(251, 146, 60, 0.3);
     }
 
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 32px;
-    }
-
+    .nav-links { display: flex; align-items: center; gap: 28px; }
     .nav-links a {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 14px;
-      font-weight: 500;
-      transition: color 0.2s;
+      color: var(--text-muted); text-decoration: none;
+      font-size: 14px; font-weight: 500; transition: color 0.2s;
     }
-
-    .nav-links a:hover {
-      color: var(--text);
-    }
+    .nav-links a:hover { color: var(--text); }
 
     .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 24px;
-      border-radius: 10px;
-      font-size: 14px;
-      font-weight: 600;
-      text-decoration: none;
-      transition: all 0.2s;
-      cursor: pointer;
-      border: none;
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 11px 22px; border-radius: 10px;
+      font-size: 14px; font-weight: 600; text-decoration: none;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      cursor: pointer; border: none; font-family: inherit;
     }
-
     .btn-primary {
-      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-      color: #000;
-      box-shadow: 0 4px 24px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.2);
+      background: linear-gradient(135deg, var(--gradient-start), #e8720c);
+      color: #fff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+      box-shadow: 0 4px 20px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.25);
     }
-
     .btn-primary:hover {
       transform: translateY(-2px);
-      box-shadow: 0 8px 32px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.2);
+      box-shadow: 0 8px 32px rgba(251, 146, 60, 0.25), inset 0 1px 0 rgba(255,255,255,0.25);
     }
+    .btn-primary .arrow { transition: transform 0.2s; }
+    .btn-primary:hover .arrow { transform: translateX(4px); }
 
     .btn-secondary {
-      background: var(--surface);
-      color: var(--text);
+      background: var(--surface); color: var(--text);
       border: 1px solid var(--border);
     }
-
     .btn-secondary:hover {
       background: var(--surface-hover);
       border-color: rgba(255,255,255,0.15);
     }
 
-    /* Hero Section */
+    /* ─── HERO ─── */
     .hero {
-      padding: 160px 0 80px;
+      padding: 160px 0 100px;
       text-align: center;
       position: relative;
     }
-
     .hero::before {
       content: '';
-      position: absolute;
-      top: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 1000px;
-      height: 800px;
-      background: radial-gradient(ellipse, var(--accent-glow) 0%, transparent 60%);
+      position: absolute; top: -100px; left: 50%; transform: translateX(-50%);
+      width: 1200px; height: 900px;
+      background: radial-gradient(ellipse at 50% 30%, rgba(251, 146, 60, 0.08) 0%, rgba(239, 68, 68, 0.04) 40%, transparent 70%);
       pointer-events: none;
-      opacity: 0.8;
     }
 
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 14px;
-      background: var(--surface);
-      border: 1px solid var(--border);
+    .version-badge {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 6px 8px 6px 16px;
+      background: rgba(251, 146, 60, 0.06);
+      border: 1px solid rgba(251, 146, 60, 0.2);
       border-radius: 100px;
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-bottom: 24px;
+      font-size: 13px; font-weight: 500;
+      color: var(--accent-soft);
+      margin-bottom: 28px;
       animation: fadeInUp 0.6s ease-out;
     }
-
-    .badge-dot {
-      width: 6px;
-      height: 6px;
-      background: #22c55e;
-      border-radius: 50%;
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
-      50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+    .version-badge .v-tag {
+      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      color: #000; font-weight: 700; font-size: 11px;
+      padding: 3px 10px; border-radius: 100px;
+      letter-spacing: 0.03em;
     }
 
     @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(20px); }
+      from { opacity: 0; transform: translateY(24px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
     .hero h1 {
-      font-size: clamp(52px, 9vw, 88px);
-      font-weight: 900;
-      line-height: 1.15;
-      letter-spacing: -0.04em;
-      margin-bottom: 28px;
+      font-size: clamp(48px, 8vw, 84px);
+      font-weight: 900; line-height: 1.08;
+      letter-spacing: -0.045em;
+      margin-bottom: 24px;
       animation: fadeInUp 0.6s ease-out 0.1s both;
     }
-
     .hero h1 .line1 {
       display: block;
-      background: linear-gradient(180deg, var(--text) 0%, rgba(250,250,250,0.7) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      background: linear-gradient(180deg, #fff 0%, rgba(240,240,242,0.65) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
     }
-
     .hero h1 .line2 {
       display: block;
-      background: linear-gradient(135deg, var(--gradient-start) 0%, #fbbf24 50%, var(--gradient-end) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      background: linear-gradient(135deg, #fbbf24 0%, var(--gradient-start) 40%, var(--gradient-end) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
       background-size: 200% 200%;
-      animation: gradientShift 4s ease infinite;
+      animation: gradientShift 5s ease infinite;
     }
-
     @keyframes gradientShift {
       0%, 100% { background-position: 0% 50%; }
       50% { background-position: 100% 50%; }
     }
 
     .hero-subtitle {
-      font-size: 20px;
-      color: var(--text-muted);
-      max-width: 580px;
-      margin: 0 auto 36px;
+      font-size: 19px; color: var(--text-muted);
+      max-width: 560px; margin: 0 auto 32px;
       line-height: 1.7;
       animation: fadeInUp 0.6s ease-out 0.2s both;
     }
+    .hero-subtitle strong { color: var(--accent-soft); font-weight: 600; }
 
-    .hero-features {
-      display: flex;
-      gap: 12px;
-      justify-content: center;
-      flex-wrap: wrap;
-      margin-bottom: 40px;
-      animation: fadeInUp 0.6s ease-out 0.3s both;
+    .hero-pills {
+      display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+      margin-bottom: 36px;
+      animation: fadeInUp 0.6s ease-out 0.25s both;
     }
-
-    .hero-feature {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 18px;
-      background: rgba(251, 146, 60, 0.08);
-      border: 1px solid rgba(251, 146, 60, 0.2);
+    .hero-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
       border-radius: 100px;
-      font-size: 13px;
-      font-weight: 500;
+      font-size: 12.5px; font-weight: 500;
+      color: var(--text-muted);
+      transition: all 0.25s;
+    }
+    .hero-pill:hover {
+      border-color: var(--border-lit);
+      color: var(--accent-soft);
+      background: rgba(251, 146, 60, 0.05);
+    }
+    .hero-pill.new-pill {
+      border-color: rgba(251, 146, 60, 0.3);
       color: var(--accent);
+      background: rgba(251, 146, 60, 0.08);
+    }
+    .hero-pill .new-dot {
+      width: 5px; height: 5px; background: var(--accent);
+      border-radius: 50%; animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(251, 146, 60, 0.5); }
+      50% { box-shadow: 0 0 0 5px rgba(251, 146, 60, 0); }
     }
 
     .hero-buttons {
-      display: flex;
-      gap: 16px;
-      justify-content: center;
-      flex-wrap: wrap;
-      margin-bottom: 80px;
+      display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;
+      margin-bottom: 72px;
+      animation: fadeInUp 0.6s ease-out 0.35s both;
+    }
+
+    .stats {
+      display: flex; gap: 56px; justify-content: center;
+      margin-bottom: 64px;
       animation: fadeInUp 0.6s ease-out 0.4s both;
     }
-
-    .btn-primary .arrow {
-      transition: transform 0.2s;
-    }
-
-    .btn-primary:hover .arrow {
-      transform: translateX(4px);
-    }
-
-    /* Stats */
-    .stats {
-      display: flex;
-      gap: 48px;
-      justify-content: center;
-      margin-bottom: 60px;
-      animation: fadeInUp 0.6s ease-out 0.5s both;
-    }
-
-    .stat {
-      text-align: center;
-    }
-
+    .stat { text-align: center; }
     .stat-value {
-      font-size: 36px;
-      font-weight: 800;
-      color: var(--text);
-      letter-spacing: -0.02em;
+      font-size: 38px; font-weight: 900; letter-spacing: -0.03em;
+      background: linear-gradient(180deg, var(--text) 0%, var(--text-muted) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
+    .stat-label { font-size: 12px; color: var(--text-dim); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }
 
-    .stat-label {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-top: 4px;
-    }
-
-    /* App Preview */
+    /* ─── APP MOCKUP ─── */
     .app-preview {
-      position: relative;
-      max-width: 400px;
-      margin: 0 auto;
-      animation: fadeInUp 0.8s ease-out 0.6s both;
+      position: relative; max-width: 420px; margin: 0 auto;
+      animation: fadeInUp 0.8s ease-out 0.5s both;
     }
-
     .app-preview::before {
       content: '';
-      position: absolute;
-      inset: -60px;
-      background: radial-gradient(ellipse at center, var(--accent-glow) 0%, transparent 70%);
-      filter: blur(60px);
-      z-index: -1;
+      position: absolute; inset: -80px;
+      background: radial-gradient(ellipse at center, rgba(251, 146, 60, 0.1) 0%, transparent 70%);
+      filter: blur(60px); z-index: -1;
     }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    .app-preview { animation: float 7s ease-in-out infinite, fadeInUp 0.8s ease-out 0.5s both; }
 
     .mockup {
-      background: rgba(14, 14, 16, 0.98);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 16px;
-      overflow: hidden;
+      background: rgba(12, 12, 16, 0.98);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px; overflow: hidden;
       box-shadow:
-        0 0 0 1px rgba(255,255,255,0.05),
-        0 25px 60px rgba(0,0,0,0.6),
-        0 0 120px var(--accent-glow);
+        0 0 0 1px rgba(255,255,255,0.04),
+        0 30px 80px rgba(0,0,0,0.7),
+        0 0 100px rgba(251, 146, 60, 0.08);
     }
-
     .mockup-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 14px 16px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px;
       border-bottom: 1px solid var(--border);
-      background: rgba(31, 31, 37, 0.6);
+      background: rgba(20, 20, 24, 0.8);
     }
-
-    .mockup-dots {
-      display: flex;
-      gap: 6px;
-    }
-
-    .mockup-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--surface);
-    }
-
+    .mockup-dots { display: flex; gap: 6px; }
+    .mockup-dot { width: 9px; height: 9px; border-radius: 50%; }
     .mockup-dot:nth-child(1) { background: #ff5f57; }
     .mockup-dot:nth-child(2) { background: #ffbd2e; }
     .mockup-dot:nth-child(3) { background: #28ca42; }
-
     .mockup-logo {
-      font-weight: 700;
-      font-size: 13px;
-      color: var(--accent);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-left: 8px;
+      font-weight: 700; font-size: 12px; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.06em; margin-left: 6px;
     }
-
     .mockup-search {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
+      flex: 1; display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px;
       background: rgba(255,255,255,0.04);
-      border-radius: 8px;
-      margin-left: auto;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 7px; margin-left: auto;
     }
+    .mockup-search span { color: var(--text-dim); font-size: 12px; }
 
-    .mockup-search span {
-      color: var(--text-dim);
-      font-size: 13px;
+    /* Tabs in mockup */
+    .mockup-tabs {
+      display: flex; gap: 2px;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(20, 20, 24, 0.4);
     }
-
-    .mockup-content {
-      padding: 10px;
+    .mockup-tab {
+      padding: 4px 9px; font-size: 10px; font-weight: 500;
+      color: var(--text-dim); border-radius: 5px;
+      transition: all 0.2s;
     }
-
-    .mockup-section {
-      margin-bottom: 10px;
-    }
-
-    .mockup-section:last-child {
-      margin-bottom: 0;
-    }
-
-    .mockup-section-title {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-dim);
-      padding: 8px 12px 6px;
-      font-weight: 600;
-    }
-
-    .mockup-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 14px;
-      border-radius: 8px;
-      font-size: 13px;
-      color: var(--text-muted);
-      transition: all 0.15s;
-    }
-
-    .mockup-item.selected {
+    .mockup-tab.active {
+      color: var(--accent);
       background: rgba(251, 146, 60, 0.12);
-      outline: 1px solid var(--accent);
-      color: var(--text);
+      border: 1px solid rgba(251, 146, 60, 0.2);
     }
 
-    .mockup-item strong {
-      color: var(--text);
-      font-weight: 600;
+    .mockup-content { padding: 8px; }
+    .mockup-section { margin-bottom: 6px; }
+    .mockup-section:last-child { margin-bottom: 0; }
+    .mockup-section-title {
+      font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-dim); padding: 6px 10px 4px; font-weight: 600;
     }
-
+    .mockup-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 12px; border-radius: 7px;
+      font-size: 12px; color: var(--text-muted); transition: all 0.15s;
+    }
+    .mockup-item.selected {
+      background: rgba(251, 146, 60, 0.1);
+      outline: 1px solid rgba(251, 146, 60, 0.4);
+      color: var(--text);
+    }
+    .mockup-item strong { color: var(--text); font-weight: 600; }
     .mockup-shortcut {
-      font-size: 11px;
-      color: var(--text-dim);
-      background: rgba(255,255,255,0.06);
-      padding: 3px 8px;
-      border-radius: 4px;
+      font-size: 10px; color: var(--text-dim); font-family: var(--mono);
+      background: rgba(255,255,255,0.05); padding: 2px 7px; border-radius: 4px;
+    }
+
+    /* Preview panel in mockup */
+    .mockup-preview {
+      margin: 4px 8px 8px;
+      padding: 10px 12px;
+      background: rgba(26, 26, 30, 0.9);
+      border: 1px solid rgba(251, 146, 60, 0.15);
+      border-radius: 8px;
+      font-size: 11px; color: #b0b0b8; line-height: 1.6;
+      font-family: var(--mono);
+    }
+    .mockup-preview .preview-label {
+      font-size: 9px; color: var(--accent); text-transform: uppercase;
+      letter-spacing: 0.08em; margin-bottom: 6px; font-weight: 600;
+      font-family: 'DM Sans', sans-serif;
     }
 
     .mockup-footer {
-      display: flex;
-      justify-content: space-between;
-      padding: 12px 16px;
+      display: flex; justify-content: space-between;
+      padding: 10px 14px;
       border-top: 1px solid var(--border);
-      font-size: 12px;
-      color: var(--text-dim);
+      font-size: 11px; color: var(--text-dim);
     }
+    .mockup-footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
 
-    .mockup-footer a {
-      color: var(--accent);
-      text-decoration: none;
-      font-weight: 500;
-    }
-
-    /* How It Works */
-    .how-it-works {
+    /* ─── WHAT'S NEW SECTION ─── */
+    .whats-new {
       padding: 120px 0;
       position: relative;
     }
-
-    .how-it-works .container {
-      text-align: center;
+    .whats-new::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(251, 146, 60, 0.04) 0%, transparent 50%);
+      pointer-events: none;
     }
+    .whats-new .container { text-align: center; }
 
-    .steps {
+    .new-features-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 32px;
-      margin-top: 64px;
+      gap: 20px;
+      margin-top: 56px;
+    }
+    @media (max-width: 900px) {
+      .new-features-grid { grid-template-columns: 1fr; max-width: 480px; margin: 56px auto 0; }
     }
 
-    @media (max-width: 800px) {
-      .steps {
-        grid-template-columns: 1fr;
-        max-width: 400px;
-        margin: 64px auto 0;
-      }
-    }
-
-    .step {
+    .new-card {
       position: relative;
-      text-align: center;
-      padding: 40px 32px;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 20px;
+      padding: 0;
+      overflow: hidden;
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .new-card::before {
+      content: '';
+      position: absolute; inset: -1px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(251, 146, 60, 0.3), transparent 50%, rgba(239, 68, 68, 0.2));
+      opacity: 0;
+      transition: opacity 0.4s;
+      z-index: -1;
+    }
+    .new-card:hover {
+      border-color: transparent;
+      transform: translateY(-6px);
+      box-shadow: 0 24px 48px rgba(0,0,0,0.4);
+    }
+    .new-card:hover::before { opacity: 1; }
+
+    .new-card-visual {
+      height: 200px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .new-card-body { padding: 28px 24px; }
+    .new-card-badge {
+      display: inline-block;
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--accent);
+      background: rgba(251, 146, 60, 0.1);
+      border: 1px solid rgba(251, 146, 60, 0.2);
+      padding: 3px 10px; border-radius: 100px;
+      margin-bottom: 14px;
+    }
+    .new-card h3 { font-size: 20px; font-weight: 700; margin-bottom: 10px; letter-spacing: -0.01em; }
+    .new-card p { font-size: 14px; color: var(--text-muted); line-height: 1.7; }
+
+    /* Tab animation visual */
+    .tabs-visual {
+      display: flex; gap: 4px; padding: 8px;
+      background: rgba(20, 20, 24, 0.9);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .tab-pill {
+      padding: 6px 12px; font-size: 11px; font-weight: 500;
+      color: var(--text-dim); border-radius: 6px;
       transition: all 0.3s;
     }
-
-    .step:hover {
-      border-color: rgba(251, 146, 60, 0.3);
-      transform: translateY(-4px);
+    .tab-pill.cycling {
+      animation: tabCycle 8s ease infinite;
+    }
+    .tab-pill:nth-child(1).cycling { animation-delay: 0s; }
+    .tab-pill:nth-child(2).cycling { animation-delay: 1.6s; }
+    .tab-pill:nth-child(3).cycling { animation-delay: 3.2s; }
+    .tab-pill:nth-child(4).cycling { animation-delay: 4.8s; }
+    .tab-pill:nth-child(5).cycling { animation-delay: 6.4s; }
+    @keyframes tabCycle {
+      0%, 15% { color: var(--accent); background: rgba(251, 146, 60, 0.12); border: 1px solid rgba(251, 146, 60, 0.25); }
+      20%, 100% { color: var(--text-dim); background: transparent; border: 1px solid transparent; }
     }
 
-    .step-number {
-      position: absolute;
-      top: -16px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 32px;
-      height: 32px;
-      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 14px;
-      color: #000;
+    /* OCR scan visual */
+    .ocr-visual {
+      width: 220px; height: 140px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      position: relative;
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      padding: 14px;
+    }
+    .ocr-visual .fake-text {
+      font-size: 9px; font-family: var(--mono);
+      color: var(--text-dim); line-height: 1.8;
+      opacity: 0.5;
+    }
+    .ocr-visual .scan-line {
+      position: absolute; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      box-shadow: 0 0 12px var(--accent), 0 0 30px rgba(251, 146, 60, 0.3);
+      animation: scanDown 3s ease-in-out infinite;
+    }
+    @keyframes scanDown {
+      0% { top: 0; opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { top: 100%; opacity: 0; }
+    }
+    .ocr-visual .extracted {
+      position: absolute; bottom: 10px; left: 10px; right: 10px;
+      padding: 6px 10px;
+      background: rgba(251, 146, 60, 0.1);
+      border: 1px solid rgba(251, 146, 60, 0.3);
+      border-radius: 6px;
+      font-size: 9px; font-family: var(--mono);
+      color: var(--accent-soft);
+      animation: fadeLoop 3s ease infinite;
+    }
+    @keyframes fadeLoop {
+      0%, 60% { opacity: 0; transform: translateY(4px); }
+      75%, 95% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; }
     }
 
-    .step-icon {
-      font-size: 48px;
-      margin-bottom: 20px;
+    /* Preview visual */
+    .preview-visual {
+      width: 220px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .preview-visual .pv-item {
+      padding: 8px 12px; font-size: 10px; color: var(--text-muted);
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      transition: all 0.3s;
+    }
+    .preview-visual .pv-item.pv-hover {
+      background: rgba(251, 146, 60, 0.08);
+      color: var(--text);
+    }
+    .preview-visual .pv-panel {
+      padding: 10px 12px;
+      background: rgba(26, 26, 30, 0.95);
+      border-top: 1px solid rgba(251, 146, 60, 0.2);
+      font-size: 9px; font-family: var(--mono);
+      color: #b0b0b8; line-height: 1.7;
+      animation: previewSlide 4s ease infinite;
+    }
+    @keyframes previewSlide {
+      0%, 100% { opacity: 0.3; max-height: 0; padding: 0 12px; }
+      20%, 80% { opacity: 1; max-height: 80px; padding: 10px 12px; }
     }
 
-    .step h3 {
-      font-size: 18px;
-      font-weight: 700;
-      margin-bottom: 12px;
-    }
-
-    .step p {
-      color: var(--text-muted);
-      font-size: 14px;
-      line-height: 1.7;
-    }
-
-    /* Features Section */
-    .features {
+    /* ─── HOW IT WORKS ─── */
+    .how-it-works {
       padding: 120px 0;
       position: relative;
+      border-top: 1px solid var(--border);
+    }
+    .how-it-works .container { text-align: center; }
+
+    .steps {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 24px; margin-top: 56px;
+    }
+    @media (max-width: 800px) {
+      .steps { grid-template-columns: 1fr; max-width: 400px; margin: 56px auto 0; }
+    }
+    .step {
+      position: relative; text-align: center;
+      padding: 40px 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .step:hover { border-color: var(--border-lit); transform: translateY(-4px); }
+    .step-number {
+      position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 12px; color: #000;
+    }
+    .step-icon { font-size: 44px; margin-bottom: 18px; }
+    .step h3 { font-size: 17px; font-weight: 700; margin-bottom: 10px; }
+    .step p { color: var(--text-muted); font-size: 14px; line-height: 1.7; }
+
+    /* ─── FEATURES ─── */
+    .features {
+      padding: 120px 0; position: relative;
       background: var(--bg-subtle);
       border-top: 1px solid var(--border);
     }
 
     .section-label {
       display: inline-block;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--accent);
-      margin-bottom: 16px;
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.12em; color: var(--accent);
+      margin-bottom: 14px;
+      font-family: var(--mono);
     }
-
     .section-title {
-      font-size: clamp(32px, 5vw, 48px);
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      margin-bottom: 16px;
+      font-size: clamp(30px, 5vw, 46px);
+      font-weight: 800; letter-spacing: -0.03em; margin-bottom: 14px;
     }
-
     .section-subtitle {
-      font-size: 18px;
-      color: var(--text-muted);
-      max-width: 600px;
-      margin-bottom: 64px;
+      font-size: 17px; color: var(--text-muted); max-width: 560px; margin-bottom: 56px; line-height: 1.7;
     }
 
     .features-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 24px;
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
     }
-
-    @media (max-width: 900px) {
-      .features-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-
-    @media (max-width: 600px) {
-      .features-grid {
-        grid-template-columns: 1fr;
-      }
-    }
+    @media (max-width: 900px) { .features-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 600px) { .features-grid { grid-template-columns: 1fr; } }
 
     .feature-card {
       background: var(--bg);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 32px;
-      transition: all 0.3s;
+      border-radius: 16px; padding: 28px;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
     }
-
+    .feature-card::after {
+      content: '';
+      position: absolute; inset: -1px; border-radius: 16px;
+      background: linear-gradient(135deg, rgba(251, 146, 60, 0.25), transparent 60%);
+      opacity: 0; transition: opacity 0.35s; z-index: -1;
+    }
     .feature-card:hover {
-      border-color: rgba(251, 146, 60, 0.3);
+      border-color: transparent;
       transform: translateY(-4px);
-      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+    }
+    .feature-card:hover::after { opacity: 1; }
+
+    .feature-card .new-tag {
+      position: absolute; top: 14px; right: 14px;
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #000; background: var(--accent);
+      padding: 2px 8px; border-radius: 4px;
     }
 
     .feature-icon {
-      width: 52px;
-      height: 52px;
-      background: linear-gradient(135deg, rgba(251, 146, 60, 0.15), transparent);
-      border: 1px solid rgba(251, 146, 60, 0.2);
-      border-radius: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 26px;
-      margin-bottom: 20px;
+      width: 48px; height: 48px;
+      background: linear-gradient(135deg, rgba(251, 146, 60, 0.12), rgba(251, 146, 60, 0.02));
+      border: 1px solid rgba(251, 146, 60, 0.15);
+      border-radius: 13px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; margin-bottom: 18px;
     }
+    .feature-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+    .feature-card p { color: var(--text-muted); font-size: 13.5px; line-height: 1.7; }
 
-    .feature-card h3 {
-      font-size: 18px;
-      font-weight: 700;
-      margin-bottom: 12px;
-    }
-
-    .feature-card p {
-      color: var(--text-muted);
-      font-size: 14px;
-      line-height: 1.7;
-    }
-
-    /* Keyboard Section */
-    .keyboard-section {
+    /* ─── OCR DEMO ─── */
+    .ocr-demo {
       padding: 120px 0;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .keyboard-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 80px;
-      align-items: center;
-    }
-
-    @media (max-width: 800px) {
-      .keyboard-grid {
-        grid-template-columns: 1fr;
-        gap: 48px;
-      }
-    }
-
-    .keyboard-content h2 {
-      font-size: clamp(32px, 5vw, 44px);
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      margin-bottom: 20px;
-    }
-
-    .keyboard-content p {
-      color: var(--text-muted);
-      font-size: 17px;
-      line-height: 1.8;
-      margin-bottom: 32px;
-    }
-
-    .shortcuts-list {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .shortcut-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .key {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 38px;
-      height: 38px;
-      padding: 0 12px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text);
-      box-shadow: 0 3px 0 rgba(0,0,0,0.3);
-    }
-
-    .shortcut-desc {
-      color: var(--text-muted);
-      font-size: 14px;
-    }
-
-    .keyboard-visual {
-      display: flex;
-      justify-content: center;
-    }
-
-    .keyboard-mockup {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      padding: 28px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-    }
-
-    .keyboard-key {
-      width: 60px;
-      height: 60px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      font-weight: 600;
-      transition: all 0.15s;
-      box-shadow: 0 4px 0 rgba(0,0,0,0.3);
-    }
-
-    .keyboard-key.active {
-      background: var(--accent);
-      color: #000;
-      border-color: var(--accent);
-      transform: translateY(2px);
-      box-shadow: 0 2px 0 var(--accent-dim);
-    }
-
-    /* CTA Section */
-    .cta {
-      padding: 160px 0;
-      text-align: center;
       position: relative;
+      overflow: hidden;
     }
-
-    .cta::before {
+    .ocr-demo::before {
       content: '';
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 100%;
-      height: 500px;
-      background: radial-gradient(ellipse at bottom, var(--accent-glow) 0%, transparent 60%);
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 800px; height: 800px;
+      background: radial-gradient(circle, rgba(251, 146, 60, 0.06) 0%, transparent 50%);
       pointer-events: none;
     }
 
-    .cta h2 {
-      font-size: clamp(40px, 7vw, 64px);
-      font-weight: 900;
-      letter-spacing: -0.03em;
-      margin-bottom: 20px;
+    .ocr-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 80px; align-items: center;
+    }
+    @media (max-width: 800px) {
+      .ocr-grid { grid-template-columns: 1fr; gap: 48px; }
     }
 
-    .cta p {
-      font-size: 18px;
-      color: var(--text-muted);
-      margin-bottom: 48px;
+    .ocr-content .section-label { display: block; }
+    .ocr-content h2 {
+      font-size: clamp(28px, 4.5vw, 42px);
+      font-weight: 800; letter-spacing: -0.03em; margin-bottom: 18px;
     }
-
-    .cta p a {
-      color: var(--accent);
-      text-decoration: none;
+    .ocr-content h2 em {
+      font-style: normal;
+      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
-
-    .download-buttons {
-      display: flex;
-      gap: 16px;
-      justify-content: center;
-      flex-wrap: wrap;
+    .ocr-content p {
+      color: var(--text-muted); font-size: 16px; line-height: 1.8; margin-bottom: 28px;
     }
-
-    .download-btn {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 18px 28px;
+    .ocr-steps {
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .ocr-step {
+      display: flex; align-items: center; gap: 14px;
+      padding: 12px 16px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 14px;
-      text-decoration: none;
-      transition: all 0.2s;
+      border-radius: 12px;
+      transition: all 0.25s;
+    }
+    .ocr-step:hover { border-color: var(--border-lit); }
+    .ocr-step-num {
+      width: 28px; height: 28px; flex-shrink: 0;
+      background: linear-gradient(135deg, rgba(251, 146, 60, 0.15), rgba(251, 146, 60, 0.05));
+      border: 1px solid rgba(251, 146, 60, 0.2);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: var(--accent);
+    }
+    .ocr-step span { font-size: 14px; color: var(--text-muted); }
+    .ocr-step strong { color: var(--text); }
+
+    /* OCR demo visual */
+    .ocr-demo-visual {
+      display: flex; justify-content: center;
+    }
+    .ocr-showcase {
+      position: relative;
+      width: 380px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .ocr-showcase-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px; font-weight: 600;
+      color: var(--text-dim); text-transform: uppercase;
+      letter-spacing: 0.06em;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .ocr-showcase-header .status {
+      display: flex; align-items: center; gap: 6px;
+      color: var(--accent); font-size: 10px;
+    }
+    .ocr-showcase-header .status::before {
+      content: ''; width: 6px; height: 6px;
+      background: var(--accent); border-radius: 50%;
+      animation: pulse 2s infinite;
     }
 
+    .ocr-image-area {
+      position: relative; padding: 20px;
+      background: var(--bg);
+      min-height: 140px;
+    }
+    .ocr-image-area .fake-screenshot {
+      background: rgba(255,255,255,0.03);
+      border: 1px dashed rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 16px;
+      font-family: var(--mono); font-size: 11px;
+      color: var(--text-dim); line-height: 1.8;
+    }
+    .ocr-image-area .scan-beam {
+      position: absolute; left: 20px; right: 20px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), var(--accent), transparent);
+      box-shadow: 0 0 16px var(--accent), 0 0 40px rgba(251, 146, 60, 0.3);
+      animation: scanDown 3.5s ease-in-out infinite;
+    }
+
+    .ocr-output {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border-lit);
+      background: rgba(251, 146, 60, 0.03);
+    }
+    .ocr-output-label {
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--accent); margin-bottom: 8px;
+    }
+    .ocr-output-text {
+      font-family: var(--mono); font-size: 12px;
+      color: var(--accent-soft); line-height: 1.7;
+      padding: 10px 12px;
+      background: rgba(251, 146, 60, 0.06);
+      border: 1px solid rgba(251, 146, 60, 0.15);
+      border-radius: 8px;
+      animation: textReveal 3.5s ease infinite;
+    }
+    @keyframes textReveal {
+      0%, 55% { opacity: 0; transform: translateY(6px); }
+      70%, 95% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; }
+    }
+
+    /* ─── INSTALL GUIDE ─── */
+    .install-guide {
+      padding: 120px 0;
+      border-top: 1px solid var(--border);
+    }
+    .install-guide .container { text-align: center; }
+
+    .platform-tabs {
+      display: flex; gap: 6px; justify-content: center;
+      margin-top: 48px; margin-bottom: 36px;
+    }
+    .platform-tab {
+      padding: 10px 22px; font-size: 14px; font-weight: 600;
+      color: var(--text-muted); background: var(--surface);
+      border: 1px solid var(--border); border-radius: 10px;
+      cursor: pointer; transition: all 0.2s;
+      font-family: inherit;
+    }
+    .platform-tab:hover { border-color: rgba(255,255,255,0.15); color: var(--text); }
+    .platform-tab.active {
+      color: var(--accent); background: rgba(251, 146, 60, 0.08);
+      border-color: rgba(251, 146, 60, 0.3);
+    }
+
+    .platform-content { display: none; text-align: left; max-width: 680px; margin: 0 auto; }
+    .platform-content.active { display: block; }
+
+    .install-step {
+      display: flex; gap: 16px; padding: 16px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .install-step:last-child { border-bottom: none; }
+    .install-step-num {
+      width: 28px; height: 28px; flex-shrink: 0;
+      background: linear-gradient(135deg, rgba(251, 146, 60, 0.15), rgba(251, 146, 60, 0.05));
+      border: 1px solid rgba(251, 146, 60, 0.2); border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: var(--accent);
+      margin-top: 2px;
+    }
+    .install-step-text { flex: 1; }
+    .install-step-text p { color: var(--text-muted); font-size: 15px; line-height: 1.7; margin: 0; }
+    .install-step-text p strong { color: var(--text); }
+    .install-step-text code {
+      font-family: var(--mono); font-size: 13px;
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 2px 8px; border-radius: 5px; color: var(--accent-soft);
+    }
+    .install-step-text .cmd-block {
+      display: block; margin-top: 8px;
+      padding: 10px 14px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: var(--mono); font-size: 13px;
+      color: var(--accent-soft); line-height: 1.7;
+    }
+
+    .install-note {
+      margin-top: 20px; padding: 14px 18px;
+      background: rgba(251, 146, 60, 0.05);
+      border: 1px solid rgba(251, 146, 60, 0.15);
+      border-radius: 10px;
+      font-size: 13px; color: var(--text-muted); line-height: 1.7;
+      text-align: left;
+    }
+    .install-note strong { color: var(--accent-soft); }
+
+    /* ─── KEYBOARD ─── */
+    .keyboard-section {
+      padding: 120px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .keyboard-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 80px; align-items: center;
+    }
+    @media (max-width: 800px) { .keyboard-grid { grid-template-columns: 1fr; gap: 48px; } }
+
+    .keyboard-content h2 {
+      font-size: clamp(28px, 4.5vw, 42px);
+      font-weight: 800; letter-spacing: -0.03em; margin-bottom: 18px;
+    }
+    .keyboard-content p {
+      color: var(--text-muted); font-size: 16px; line-height: 1.8; margin-bottom: 28px;
+    }
+    .shortcuts-list { display: flex; flex-direction: column; gap: 12px; }
+    .shortcut-row { display: flex; align-items: center; gap: 10px; }
+    .key {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 36px; height: 36px; padding: 0 10px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; font-size: 13px; font-weight: 600;
+      color: var(--text);
+      box-shadow: 0 2px 0 rgba(0,0,0,0.4);
+    }
+    .shortcut-desc { color: var(--text-muted); font-size: 13px; }
+
+    .keyboard-visual { display: flex; justify-content: center; }
+    .keyboard-mockup {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 8px; padding: 24px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 18px;
+    }
+    .keyboard-key {
+      width: 56px; height: 56px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; font-weight: 600;
+      transition: all 0.15s;
+      box-shadow: 0 3px 0 rgba(0,0,0,0.4);
+    }
+    .keyboard-key.active {
+      background: var(--accent); color: #000;
+      border-color: var(--accent);
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 var(--accent-dim), 0 0 16px rgba(251, 146, 60, 0.3);
+    }
+
+    /* ─── CTA ─── */
+    .cta {
+      padding: 140px 0; text-align: center; position: relative;
+    }
+    .cta::before {
+      content: '';
+      position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+      width: 100%; height: 500px;
+      background: radial-gradient(ellipse at bottom, rgba(251, 146, 60, 0.08) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .cta h2 {
+      font-size: clamp(36px, 6vw, 58px);
+      font-weight: 900; letter-spacing: -0.03em; margin-bottom: 18px;
+    }
+    .cta p { font-size: 17px; color: var(--text-muted); margin-bottom: 44px; }
+    .cta p a { color: var(--accent); text-decoration: none; }
+
+    .download-buttons { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .download-btn {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 24px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; text-decoration: none;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
     .download-btn:hover {
       background: var(--surface-hover);
       border-color: var(--accent);
       transform: translateY(-3px);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.4), 0 0 20px rgba(251, 146, 60, 0.1);
     }
+    .download-btn svg { width: 28px; height: 28px; fill: var(--text); }
+    .download-info { text-align: left; }
+    .download-label { font-size: 11px; color: var(--text-muted); }
+    .download-platform { font-size: 15px; font-weight: 600; color: var(--text); }
 
-    .download-btn svg {
-      width: 30px;
-      height: 30px;
-      fill: var(--text);
-    }
+    /* ─── FOOTER ─── */
+    footer { padding: 44px 0; border-top: 1px solid var(--border); }
+    footer .container { display: flex; align-items: center; justify-content: space-between; }
+    .footer-links { display: flex; gap: 24px; }
+    .footer-links a { color: var(--text-muted); text-decoration: none; font-size: 13px; transition: color 0.2s; }
+    .footer-links a:hover { color: var(--text); }
+    .copyright { color: var(--text-dim); font-size: 13px; }
 
-    .download-info {
-      text-align: left;
-    }
-
-    .download-label {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-
-    .download-platform {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    /* Footer */
-    footer {
-      padding: 48px 0;
-      border-top: 1px solid var(--border);
-    }
-
-    footer .container {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .footer-links {
-      display: flex;
-      gap: 28px;
-    }
-
-    .footer-links a {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 14px;
-      transition: color 0.2s;
-    }
-
-    .footer-links a:hover {
-      color: var(--text);
-    }
-
-    .copyright {
-      color: var(--text-dim);
-      font-size: 14px;
-    }
-
-    /* Animations */
-    @keyframes float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-12px); }
-    }
-
-    .app-preview {
-      animation: float 6s ease-in-out infinite;
-    }
-
-    /* Mobile nav */
+    /* ─── RESPONSIVE ─── */
     @media (max-width: 700px) {
-      .nav-links {
-        display: none;
-      }
-
-      footer .container {
-        flex-direction: column;
-        gap: 24px;
-        text-align: center;
-      }
-
-      .stats {
-        gap: 32px;
-      }
-
-      .stat-value {
-        font-size: 28px;
-      }
+      .nav-links { display: none; }
+      footer .container { flex-direction: column; gap: 20px; text-align: center; }
+      .stats { gap: 28px; }
+      .stat-value { font-size: 28px; }
+      .hero h1 { letter-spacing: -0.035em; }
     }
   </style>
 </head>
 <body>
+
   <nav>
     <div class="container">
       <a href="#" class="logo">
@@ -883,7 +963,8 @@
         Perch
       </a>
       <div class="nav-links">
-        <a href="#how-it-works">How it Works</a>
+        <a href="#whats-new">What's New</a>
+        <a href="#install">Install</a>
         <a href="#features">Features</a>
         <a href="https://github.com/RajeshRenato/open-perch" target="_blank">GitHub</a>
         <a href="#download" class="btn btn-primary">Download Free</a>
@@ -891,26 +972,33 @@
     </div>
   </nav>
 
+  <!-- ═══ HERO ═══ -->
   <section class="hero">
     <div class="container">
-      <div class="badge">
-        <span class="badge-dot"></span>
-        Open Source & Free Forever
+      <div class="version-badge">
+        Now with OCR & Smart Tabs
+        <span class="v-tag">v1.1.0</span>
       </div>
+
       <h1>
         <span class="line1">Your clipboard,</span>
         <span class="line2">supercharged.</span>
       </h1>
+
       <p class="hero-subtitle">
         A blazing-fast clipboard manager that lives in your menu bar.
-        Save snippets, track history, paste instantly with keyboard shortcuts.
+        Now with <strong>OCR text extraction</strong>, smart filtering tabs, and inline previews.
       </p>
-      <div class="hero-features">
-        <span class="hero-feature">⌨️ Custom Hotkeys</span>
-        <span class="hero-feature">🖼️ Image Support</span>
-        <span class="hero-feature">💾 Backup & Restore</span>
-        <span class="hero-feature">🔍 Instant Search</span>
+
+      <div class="hero-pills">
+        <span class="hero-pill new-pill"><span class="new-dot"></span> OCR Extract Text</span>
+        <span class="hero-pill new-pill"><span class="new-dot"></span> Smart Tabs</span>
+        <span class="hero-pill new-pill"><span class="new-dot"></span> Hover Preview</span>
+        <span class="hero-pill">Keyboard-First</span>
+        <span class="hero-pill">Image Support</span>
+        <span class="hero-pill">Backup & Restore</span>
       </div>
+
       <div class="hero-buttons">
         <a href="#download" class="btn btn-primary">
           Download Free <span class="arrow">→</span>
@@ -935,6 +1023,7 @@
         </div>
       </div>
 
+      <!-- Updated mockup with tabs & preview -->
       <div class="app-preview">
         <div class="mockup">
           <div class="mockup-header">
@@ -948,6 +1037,14 @@
               <span>🔍</span>
               <span>Search...</span>
             </div>
+          </div>
+          <div class="mockup-tabs">
+            <span class="mockup-tab active">All</span>
+            <span class="mockup-tab">Snippets</span>
+            <span class="mockup-tab">Images</span>
+            <span class="mockup-tab">Extract Text</span>
+            <span class="mockup-tab">Links</span>
+            <span class="mockup-tab">Texts</span>
           </div>
           <div class="mockup-content">
             <div class="mockup-section">
@@ -968,17 +1065,18 @@
                 <span class="mockup-shortcut">⌘3</span>
               </div>
               <div class="mockup-item">
-                <span>const config = {...}</span>
-                <span class="mockup-shortcut">⌘4</span>
-              </div>
-              <div class="mockup-item">
                 <span>🖼️ Screenshot (1200×630)</span>
-                <span class="mockup-shortcut">⌘5</span>
+                <span class="mockup-shortcut">⌘4</span>
               </div>
             </div>
           </div>
+          <div class="mockup-preview">
+            <div class="preview-label">Preview</div>
+            sk-proj-abc123...def456<br>
+            Production API key for v2
+          </div>
           <div class="mockup-footer">
-            <span>5 items</span>
+            <span>4 items</span>
             <a href="#">Open Perch →</a>
           </div>
         </div>
@@ -986,26 +1084,99 @@
     </div>
   </section>
 
+  <!-- ═══ WHAT'S NEW ═══ -->
+  <section class="whats-new" id="whats-new">
+    <div class="container">
+      <span class="section-label reveal">New in v1.1.0</span>
+      <h2 class="section-title reveal reveal-delay-1">Three powerful new features</h2>
+      <p class="section-subtitle reveal reveal-delay-2" style="margin-left:auto;margin-right:auto;text-align:center;">
+        Perch just got a lot smarter. Filter, extract, preview — all from your menu bar.
+      </p>
+
+      <div class="new-features-grid">
+        <!-- Smart Tabs -->
+        <div class="new-card reveal">
+          <div class="new-card-visual">
+            <div class="tabs-visual">
+              <span class="tab-pill cycling">All</span>
+              <span class="tab-pill cycling">Snippets</span>
+              <span class="tab-pill cycling">Images</span>
+              <span class="tab-pill cycling">Links</span>
+              <span class="tab-pill cycling">Texts</span>
+            </div>
+          </div>
+          <div class="new-card-body">
+            <span class="new-card-badge">Smart Tabs</span>
+            <h3>Filter by type, instantly</h3>
+            <p>Switch between All, Snippets, Images, Links, and Texts with a single click. Find what you need without scrolling.</p>
+          </div>
+        </div>
+
+        <!-- OCR -->
+        <div class="new-card reveal reveal-delay-1">
+          <div class="new-card-visual">
+            <div class="ocr-visual">
+              <div class="fake-text">
+                const API_KEY = "sk-..."<br>
+                fetch('/api/data', {<br>
+                &nbsp;&nbsp;headers: { auth: key }
+              </div>
+              <div class="scan-line"></div>
+              <div class="extracted">Text copied to clipboard ✓</div>
+            </div>
+          </div>
+          <div class="new-card-body">
+            <span class="new-card-badge">OCR Extract</span>
+            <h3>Text from any screenshot</h3>
+            <p>Click any captured image to extract its text instantly. Powered by Tesseract.js — works completely offline.</p>
+          </div>
+        </div>
+
+        <!-- Inline Preview -->
+        <div class="new-card reveal reveal-delay-2">
+          <div class="new-card-visual">
+            <div class="preview-visual">
+              <div class="pv-item">npm install perch-app</div>
+              <div class="pv-item pv-hover">API Key — Production</div>
+              <div class="pv-item">Email template draft</div>
+              <div class="pv-panel">
+                sk-proj-abc123xyz<br>
+                // Production v2 key<br>
+                // Expires: 2025-12-01
+              </div>
+            </div>
+          </div>
+          <div class="new-card-body">
+            <span class="new-card-badge">Hover Preview</span>
+            <h3>See before you paste</h3>
+            <p>Hover over any clipboard item to preview its full content inline — no more guessing what you copied.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ HOW IT WORKS ═══ -->
   <section class="how-it-works" id="how-it-works">
     <div class="container">
-      <span class="section-label">How It Works</span>
-      <h2 class="section-title">Simple. Fast. Powerful.</h2>
-      <p class="section-subtitle">Get started in seconds. No account, no cloud, no complexity.</p>
+      <span class="section-label reveal">How It Works</span>
+      <h2 class="section-title reveal reveal-delay-1">Simple. Fast. Powerful.</h2>
+      <p class="section-subtitle reveal reveal-delay-2" style="margin-left:auto;margin-right:auto;text-align:center;">Get started in seconds. No account, no cloud, no complexity.</p>
 
       <div class="steps">
-        <div class="step">
+        <div class="step reveal">
           <div class="step-number">1</div>
           <div class="step-icon">📥</div>
           <h3>Install & Launch</h3>
           <p>Download for your platform, open once. Perch sits quietly in your menu bar, always ready.</p>
         </div>
-        <div class="step">
+        <div class="step reveal reveal-delay-1">
           <div class="step-number">2</div>
           <div class="step-icon">📋</div>
           <h3>Copy Anything</h3>
           <p>Every text and image you copy is automatically saved. Up to 100 items in your history.</p>
         </div>
-        <div class="step">
+        <div class="step reveal reveal-delay-2">
           <div class="step-number">3</div>
           <div class="step-icon">⚡</div>
           <h3>Paste Instantly</h3>
@@ -1015,42 +1186,175 @@
     </div>
   </section>
 
+  <!-- ═══ INSTALL GUIDE ═══ -->
+  <section class="install-guide" id="install">
+    <div class="container">
+      <span class="section-label reveal">Installation Guide</span>
+      <h2 class="section-title reveal reveal-delay-1">Up and running<br>in under a minute</h2>
+      <p class="section-subtitle reveal reveal-delay-2" style="margin-left:auto;margin-right:auto;text-align:center;">
+        Platform-specific setup — because first-launch quirks shouldn't slow you down.
+      </p>
+
+      <div class="platform-tabs reveal">
+        <button class="platform-tab active" data-platform="mac">macOS</button>
+        <button class="platform-tab" data-platform="win">Windows</button>
+        <button class="platform-tab" data-platform="linux">Linux</button>
+      </div>
+
+      <!-- macOS -->
+      <div class="platform-content active reveal" id="platform-mac">
+        <div class="install-step">
+          <div class="install-step-num">1</div>
+          <div class="install-step-text">
+            <p>Download the <strong>.dmg</strong> file — choose <strong>Apple Silicon</strong> (M1/M2/M3/M4) or <strong>Intel</strong> based on your Mac</p>
+          </div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">2</div>
+          <div class="install-step-text">
+            <p>Open the <strong>.dmg</strong> and drag <strong>Perch</strong> into your Applications folder</p>
+          </div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">3</div>
+          <div class="install-step-text">
+            <p>Launch Perch — macOS will block it because it's not from the App Store. That's normal.</p>
+          </div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">4</div>
+          <div class="install-step-text">
+            <p>Go to <strong>System Settings → Privacy & Security</strong>, scroll down to the Security section, and click <strong>Open Anyway</strong></p>
+          </div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">5</div>
+          <div class="install-step-text">
+            <p>Click <strong>Open</strong> in the confirmation dialog — you only need to do this once. Perch will appear in your menu bar.</p>
+          </div>
+        </div>
+        <div class="install-note">
+          <strong>Shortcut:</strong> Press <code>Cmd+Shift+R</code> anywhere to open the popup. You can customize this key in the app settings.
+        </div>
+      </div>
+
+      <!-- Windows -->
+      <div class="platform-content" id="platform-win">
+        <div class="install-step">
+          <div class="install-step-num">1</div>
+          <div class="install-step-text">
+            <p>Download <strong>Perch Setup 1.1.0.exe</strong> from the releases page</p>
+          </div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">2</div>
+          <div class="install-step-text">
+            <p>Run the installer — <strong>Windows Defender SmartScreen</strong> will show a warning (the app isn't code-signed yet)</p>
+          </div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">3</div>
+          <div class="install-step-text">
+            <p>Click <strong>More info</strong> on the SmartScreen popup, then click <strong>Run anyway</strong></p>
+          </div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">4</div>
+          <div class="install-step-text">
+            <p>Follow the installation wizard. Perch will start automatically and appear in your <strong>system tray</strong> (bottom-right)</p>
+          </div>
+        </div>
+        <div class="install-note">
+          <strong>Shortcut:</strong> Press <code>Ctrl+Shift+R</code> anywhere to open the popup. If Windows Defender flags it later, add Perch to your antivirus exceptions.
+        </div>
+      </div>
+
+      <!-- Linux -->
+      <div class="platform-content" id="platform-linux">
+        <div class="install-step">
+          <div class="install-step-num">1</div>
+          <div class="install-step-text">
+            <p><strong>AppImage</strong> — download, make executable, and run:</p>
+            <code class="cmd-block">chmod +x Perch-1.1.0-x86_64.AppImage<br>./Perch-1.1.0-x86_64.AppImage</code>
+          </div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">2</div>
+          <div class="install-step-text">
+            <p><strong>Debian/Ubuntu (.deb)</strong> — install with dpkg:</p>
+            <code class="cmd-block">sudo dpkg -i Perch-1.1.0-amd64.deb</code>
+          </div>
+        </div>
+        <div class="install-step">
+          <div class="install-step-num">3</div>
+          <div class="install-step-text">
+            <p>Perch will appear in your <strong>system tray</strong>. Click the icon to open the popup.</p>
+          </div>
+        </div>
+        <div class="install-note">
+          <strong>Shortcut troubleshooting:</strong> The global shortcut <code>Ctrl+Shift+R</code> may conflict with other apps (especially terminals). If it doesn't work:<br>
+          • Check <strong>Settings → Keyboard → Shortcuts</strong> on GNOME for conflicts<br>
+          • On <strong>Wayland</strong>, Perch falls back to X11 mode — try clicking the tray icon if the shortcut doesn't respond<br>
+          • You can change the shortcut key inside the app: open Perch main window → Settings
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ FEATURES ═══ -->
   <section class="features" id="features">
     <div class="container">
-      <span class="section-label">Features</span>
-      <h2 class="section-title">Everything you need,<br>nothing you don't</h2>
-      <p class="section-subtitle">
+      <span class="section-label reveal">Features</span>
+      <h2 class="section-title reveal reveal-delay-1">Everything you need,<br>nothing you don't</h2>
+      <p class="section-subtitle reveal reveal-delay-2">
         Designed for speed and simplicity. No bloat, no subscriptions, no cloud sync.
-        Just a fast clipboard manager that stays out of your way.
       </p>
 
       <div class="features-grid">
-        <div class="feature-card">
+        <div class="feature-card reveal">
+          <span class="new-tag">New</span>
+          <div class="feature-icon">🔤</div>
+          <h3>OCR Text Extraction</h3>
+          <p>Extract text from any screenshot with one click. Powered by Tesseract.js, runs entirely offline on your machine.</p>
+        </div>
+        <div class="feature-card reveal reveal-delay-1">
+          <span class="new-tag">New</span>
+          <div class="feature-icon">📑</div>
+          <h3>Smart Tabs</h3>
+          <p>Filter clipboard by type: All, Snippets, Images, Links, or plain Text. Jump straight to what you need.</p>
+        </div>
+        <div class="feature-card reveal reveal-delay-2">
+          <span class="new-tag">New</span>
+          <div class="feature-icon">👁</div>
+          <h3>Hover Preview</h3>
+          <p>See the full content of any item before pasting. Preview text and images inline — no more blind pastes.</p>
+        </div>
+        <div class="feature-card reveal">
           <div class="feature-icon">📌</div>
           <h3>Saved Snippets</h3>
           <p>Pin your most-used text with custom labels. API keys, email templates, code snippets — always one click away.</p>
         </div>
-        <div class="feature-card">
+        <div class="feature-card reveal reveal-delay-1">
           <div class="feature-icon">📋</div>
           <h3>Clipboard History</h3>
           <p>Auto-captures everything you copy. Text and images, up to 100 items. Never lose that thing you copied.</p>
         </div>
-        <div class="feature-card">
+        <div class="feature-card reveal reveal-delay-2">
           <div class="feature-icon">⌨️</div>
           <h3>Customizable Hotkey</h3>
-          <p>Set your own global shortcut. Navigate with arrows, quick-select with ⌘1-9. Your hands never leave the keyboard.</p>
+          <p>Set your own global shortcut. Navigate with arrows, quick-select with ⌘1-9. Keyboard-first workflow.</p>
         </div>
-        <div class="feature-card">
+        <div class="feature-card reveal">
           <div class="feature-icon">🔍</div>
           <h3>Instant Search</h3>
-          <p>Start typing to filter. Search across snippets and history instantly. Find anything in milliseconds.</p>
+          <p>Start typing to filter across snippets and history. Find anything in milliseconds.</p>
         </div>
-        <div class="feature-card">
+        <div class="feature-card reveal reveal-delay-1">
           <div class="feature-icon">💾</div>
           <h3>Backup & Restore</h3>
-          <p>Export your snippets and settings. Restore on any device. Never lose your data when switching machines.</p>
+          <p>Export your snippets and settings. Restore on any device. Never lose your data.</p>
         </div>
-        <div class="feature-card">
+        <div class="feature-card reveal reveal-delay-2">
           <div class="feature-icon">🌍</div>
           <h3>Cross Platform</h3>
           <p>Native apps for macOS, Windows, and Linux. Same experience, wherever you work.</p>
@@ -1059,15 +1363,69 @@
     </div>
   </section>
 
+  <!-- ═══ OCR DEMO ═══ -->
+  <section class="ocr-demo">
+    <div class="container">
+      <div class="ocr-grid">
+        <div class="ocr-content reveal">
+          <span class="section-label">Extract Text</span>
+          <h2>Copy a screenshot.<br>Extract the text.<br><em>One click.</em></h2>
+          <p>
+            Perch uses Tesseract.js to read text from any image in your clipboard history.
+            No cloud, no API keys, no internet required. It just works.
+          </p>
+          <div class="ocr-steps">
+            <div class="ocr-step">
+              <div class="ocr-step-num">1</div>
+              <span>Take a <strong>screenshot</strong> — it lands in your history</span>
+            </div>
+            <div class="ocr-step">
+              <div class="ocr-step-num">2</div>
+              <span>Switch to the <strong>Extract Text</strong> tab</span>
+            </div>
+            <div class="ocr-step">
+              <div class="ocr-step-num">3</div>
+              <span>Click the image — <strong>text copied</strong> to clipboard</span>
+            </div>
+          </div>
+        </div>
+        <div class="ocr-demo-visual reveal reveal-delay-2">
+          <div class="ocr-showcase">
+            <div class="ocr-showcase-header">
+              <span>Extract Text</span>
+              <span class="status">Processing</span>
+            </div>
+            <div class="ocr-image-area">
+              <div class="fake-screenshot">
+                Error: Cannot read property<br>
+                'data' of undefined<br>
+                &nbsp;&nbsp;at UserService.js:42<br>
+                &nbsp;&nbsp;at processTicksAndRejections
+              </div>
+              <div class="scan-beam"></div>
+            </div>
+            <div class="ocr-output">
+              <div class="ocr-output-label">Extracted Text</div>
+              <div class="ocr-output-text">
+                Error: Cannot read property 'data' of undefined at UserService.js:42
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ KEYBOARD ═══ -->
   <section class="keyboard-section" id="keyboard">
     <div class="container">
       <div class="keyboard-grid">
-        <div class="keyboard-content">
+        <div class="keyboard-content reveal">
           <span class="section-label">Keyboard Shortcuts</span>
           <h2>Built for<br>keyboard power users</h2>
           <p>
             Every action has a shortcut. Open the popup, search, navigate, and paste —
-            all without touching your mouse. It's the way clipboard should work.
+            all without touching your mouse.
           </p>
           <div class="shortcuts-list">
             <div class="shortcut-row">
@@ -1092,7 +1450,7 @@
             </div>
           </div>
         </div>
-        <div class="keyboard-visual">
+        <div class="keyboard-visual reveal reveal-delay-2">
           <div class="keyboard-mockup">
             <div class="keyboard-key active">⌘</div>
             <div class="keyboard-key active">⇧</div>
@@ -1108,34 +1466,35 @@
     </div>
   </section>
 
+  <!-- ═══ CTA / DOWNLOAD ═══ -->
   <section class="cta" id="download">
     <div class="container">
-      <h2>Ready to supercharge<br>your clipboard?</h2>
-      <p>Free and open source. No account required.<br>
+      <h2 class="reveal">Ready to supercharge<br>your clipboard?</h2>
+      <p class="reveal reveal-delay-1">Free and open source. No account required.<br>
       <a href="https://github.com/RajeshRenato/open-perch/releases" target="_blank">View all releases →</a></p>
-      <div class="download-buttons">
-        <a href="https://github.com/RajeshRenato/open-perch/releases/latest/download/Perch-1.0.1-arm64.dmg" class="download-btn">
+      <div class="download-buttons reveal reveal-delay-2">
+        <a href="https://github.com/RajeshRenato/open-perch/releases/latest/download/Perch-1.1.0-arm64.dmg" class="download-btn">
           <svg viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
           <div class="download-info">
             <div class="download-label">Download for</div>
             <div class="download-platform">macOS (Apple Silicon)</div>
           </div>
         </a>
-        <a href="https://github.com/RajeshRenato/open-perch/releases/latest/download/Perch-1.0.1.dmg" class="download-btn">
+        <a href="https://github.com/RajeshRenato/open-perch/releases/latest/download/Perch-1.1.0.dmg" class="download-btn">
           <svg viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
           <div class="download-info">
             <div class="download-label">Download for</div>
             <div class="download-platform">macOS (Intel)</div>
           </div>
         </a>
-        <a href="https://github.com/RajeshRenato/open-perch/releases/latest/download/Perch.Setup.1.0.1.exe" class="download-btn">
+        <a href="https://github.com/RajeshRenato/open-perch/releases/latest/download/Perch.Setup.1.1.0.exe" class="download-btn">
           <svg viewBox="0 0 24 24"><path d="M3 12V6.75l6-1.32v6.48L3 12m17-9v8.75l-10 .15V5.21L20 3m-10 9.1l10 .15V21l-10-1.91v-7.99M3 13l6 .09v6.81l-6-1.15V13z"/></svg>
           <div class="download-info">
             <div class="download-label">Download for</div>
             <div class="download-platform">Windows</div>
           </div>
         </a>
-        <a href="https://github.com/RajeshRenato/open-perch/releases/latest/download/Perch-1.0.1-x86_64.AppImage" class="download-btn">
+        <a href="https://github.com/RajeshRenato/open-perch/releases/latest/download/Perch-1.1.0-x86_64.AppImage" class="download-btn">
           <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
           <div class="download-info">
             <div class="download-label">Download for</div>
@@ -1159,5 +1518,28 @@
       </div>
     </div>
   </footer>
+
+  <script>
+    // Scroll-triggered reveal animations
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    // Platform tab switching
+    document.querySelectorAll('.platform-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.platform-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.platform-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('platform-' + tab.dataset.platform).classList.add('active');
+      });
+    });
+  </script>
 </body>
 </html>
