@@ -1453,10 +1453,13 @@
           </div>
         </div>
         <div class="install-note">
-          <strong>Shortcut troubleshooting:</strong> The global shortcut <code>Ctrl+Shift+R</code> may conflict with other apps (especially terminals). If it doesn't work:<br>
-          • Check <strong>Settings → Keyboard → Shortcuts</strong> on GNOME for conflicts<br>
-          • On <strong>Wayland</strong>, Perch falls back to X11 mode — try clicking the tray icon if the shortcut doesn't respond<br>
-          • You can change the shortcut key inside the app: open Perch main window → Settings
+          <strong>Shortcut troubleshooting:</strong> Electron's built-in global shortcut (<code>Ctrl+Shift+R</code>) doesn't work reliably on Linux — especially on <strong>Wayland</strong>, where the OS blocks apps from grabbing global keys. Use the <code>--popup</code> workaround instead:<br><br>
+          <strong>1.</strong> Open <strong>Settings → Keyboard → Custom Shortcuts</strong> (or your DE's equivalent)<br>
+          <strong>2.</strong> Add a new shortcut:<br>
+          &nbsp;&nbsp;• <strong>Name:</strong> Perch Popup<br>
+          &nbsp;&nbsp;• <strong>Command:</strong> <code>/path/to/Perch.AppImage --popup</code><br>
+          &nbsp;&nbsp;• <strong>Shortcut:</strong> Pick any key combo (e.g. <code>Super+V</code>)<br><br>
+          The desktop environment handles the keybinding (works on X11 + Wayland) and tells the running Perch instance to toggle the popup.
         </div>
       </div>
     </div>
