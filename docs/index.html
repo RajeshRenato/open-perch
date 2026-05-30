@@ -419,6 +419,33 @@
     }
     .new-card:hover::before { opacity: 1; }
 
+    /* Highlighted (popular) cards */
+    .new-card.highlighted {
+      border-color: rgba(251, 146, 60, 0.35);
+      box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.2), 0 12px 32px rgba(251, 146, 60, 0.08);
+    }
+    .new-card.highlighted::before { opacity: 0.6; }
+    .new-card.highlighted .new-card-badge {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+    }
+
+    .card-tag {
+      position: absolute; top: 14px; right: 14px;
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 3px 8px; border-radius: 4px;
+      z-index: 2;
+    }
+    .card-tag.new {
+      color: #000; background: var(--accent);
+    }
+    .card-tag.popular {
+      color: var(--accent); background: rgba(251, 146, 60, 0.12);
+      border: 1px solid rgba(251, 146, 60, 0.3);
+    }
+
     .new-card-visual {
       height: 200px;
       background: var(--bg);
@@ -1155,15 +1182,77 @@
   <!-- ═══ WHAT'S NEW ═══ -->
   <section class="whats-new" id="whats-new">
     <div class="container">
-      <span class="section-label reveal">New in v1.2.0</span>
-      <h2 class="section-title reveal reveal-delay-1">A notepad in your menu bar</h2>
+      <span class="section-label reveal">What's Inside</span>
+      <h2 class="section-title reveal reveal-delay-1">Six features that earn their keep</h2>
       <p class="section-subtitle reveal reveal-delay-2" style="margin-left:auto;margin-right:auto;text-align:center;">
-        Capture quick thoughts, drafts, and reminders — without leaving the popup.
+        From OCR text extraction to a built-in notepad — Perch packs more than a clipboard manager should.
       </p>
 
       <div class="new-features-grid">
-        <!-- Notepad -->
+        <!-- OCR (highlighted) -->
+        <div class="new-card highlighted reveal">
+          <span class="card-tag popular">⭐ Popular</span>
+          <div class="new-card-visual">
+            <div class="ocr-visual">
+              <div class="fake-text">
+                const API_KEY = "sk-..."<br>
+                fetch('/api/data', {<br>
+                &nbsp;&nbsp;headers: { auth: key }
+              </div>
+              <div class="scan-line"></div>
+              <div class="extracted">Text copied to clipboard ✓</div>
+            </div>
+          </div>
+          <div class="new-card-body">
+            <span class="new-card-badge">OCR Extract</span>
+            <h3>Text from any screenshot</h3>
+            <p>Click any captured image to extract its text instantly. Powered by Tesseract.js — works completely offline.</p>
+          </div>
+        </div>
+
+        <!-- Smart Tabs (highlighted) -->
+        <div class="new-card highlighted reveal reveal-delay-1">
+          <span class="card-tag popular">⭐ Popular</span>
+          <div class="new-card-visual">
+            <div class="tabs-visual">
+              <span class="tab-pill cycling">All</span>
+              <span class="tab-pill cycling">Snippets</span>
+              <span class="tab-pill cycling">Images</span>
+              <span class="tab-pill cycling">Links</span>
+              <span class="tab-pill cycling">Texts</span>
+            </div>
+          </div>
+          <div class="new-card-body">
+            <span class="new-card-badge">Smart Tabs</span>
+            <h3>Filter by type, instantly</h3>
+            <p>Switch between All, Snippets, Images, Links, and Texts with a single click. Find what you need without scrolling.</p>
+          </div>
+        </div>
+
+        <!-- Hover Preview -->
+        <div class="new-card reveal reveal-delay-2">
+          <div class="new-card-visual">
+            <div class="preview-visual">
+              <div class="pv-item">npm install perch-app</div>
+              <div class="pv-item pv-hover">API Key — Production</div>
+              <div class="pv-item">Email template draft</div>
+              <div class="pv-panel">
+                sk-proj-abc123xyz<br>
+                // Production v2 key<br>
+                // Expires: 2025-12-01
+              </div>
+            </div>
+          </div>
+          <div class="new-card-body">
+            <span class="new-card-badge">Hover Preview</span>
+            <h3>See before you paste</h3>
+            <p>Hover over any clipboard item to preview its full content inline — no more guessing what you copied.</p>
+          </div>
+        </div>
+
+        <!-- Notepad (new) -->
         <div class="new-card reveal">
+          <span class="card-tag new">New</span>
           <div class="new-card-visual">
             <div class="preview-visual" style="width:240px;">
               <div class="pv-item pv-hover" style="font-weight:600;color:var(--accent);">📝 Notepad</div>
@@ -1182,8 +1271,9 @@
           </div>
         </div>
 
-        <!-- Check for updates -->
+        <!-- Check for updates (new) -->
         <div class="new-card reveal reveal-delay-1">
+          <span class="card-tag new">New</span>
           <div class="new-card-visual">
             <div class="ocr-visual">
               <div class="fake-text">
@@ -1203,8 +1293,9 @@
           </div>
         </div>
 
-        <!-- Feed the bird -->
+        <!-- Feed the bird (new) -->
         <div class="new-card reveal reveal-delay-2">
+          <span class="card-tag new">New</span>
           <div class="new-card-visual">
             <div class="preview-visual" style="width:240px;">
               <div class="pv-item">Perch saved you 347 times</div>
